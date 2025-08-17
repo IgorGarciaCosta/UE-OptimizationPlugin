@@ -2,8 +2,8 @@
 #if WITH_EDITOR
 
 #include "Widgets/SCompoundWidget.h"
-#include "TextureFootprint.h"
 #include "AssetThumbnail.h"
+#include "TextureFootprint.h"
 
 class UTextureBudgetScanner;
 
@@ -16,20 +16,28 @@ public:
     void Construct(const FArguments& InArgs);
 
 private:
-    /* UI callbacks */
+    /* UI --------------------------------------------------- */
     FReply OnScanClicked();
-    void   HandleScanFinished(const TArray<FTextureFootprint>& Results);
-    void   OpenAsset(const TSharedPtr<FTextureFootprint>& Item);   // ← novo
+    void   HandleFootprintReady(const FTextureFootprint& FP);
+    void   HandleScanFinished();
+    void   OpenAsset(const TSharedPtr<FTextureFootprint>& Item);
 
-    /* ListView + dados */
+    /* Estado ----------------------------------------------- */
+    bool bIsScanning = false;
+    double LastRefresh = 0.0;
+
+    /* Widgets ---------------------------------------------- */
     TSharedPtr<SListView<TSharedPtr<FTextureFootprint>>> ListView;
+    TSharedPtr<class SThrobber> Spinner;
+
+    /* Dados ------------------------------------------------ */
     TArray<TSharedPtr<FTextureFootprint>> RowData;
 
-    /* Scanner UObject */
+    /* Scanner UObject -------------------------------------- */
     TObjectPtr<UTextureBudgetScanner> Scanner;
 
-    /* Pool de thumbnails compartilhado pelo widget */
+    /* Thumbnails ------------------------------------------- */
     static TSharedPtr<FAssetThumbnailPool> ThumbPool;
 };
 
-#endif  // WITH_EDITOR
+#endif /* WITH_EDITOR */

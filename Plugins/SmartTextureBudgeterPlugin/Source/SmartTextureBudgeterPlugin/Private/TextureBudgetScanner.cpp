@@ -1,48 +1,92 @@
-#include "TextureBudgetScanner.h"
+﻿#include "TextureBudgetScanner.h"
+
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "Engine/Texture2D.h"
 
-void UTextureBudgetScanner::ScanProject()
+/* ----------------------------------------------------------------- */
+void UTextureBudgetScanner::StartAsyncScan(int32 InBatchSize)
 {
-    TArray<FTextureFootprint> Results;
+    if (bScanning) return;
 
-    /* 1. AssetRegistry */
-    FAssetRegistryModule& Arm = FModuleManager::LoadModuleChecked<FAssetRegistryModule>("AssetRegistry");
-    IAssetRegistry& Registry = Arm.Get();
+    BatchSize = FMath::Max(1, InBatchSize);
+    CurrentIndex = 0;
+    Assets.Empty();
 
-    /* 2. Filtro para UTexture2D */
+    /* 1. Pega todos os AssetData de UTexture2D (rápido, sem carga) */
+    FAssetRegistryModule& ARM =
+        FModuleManager::LoadModuleChecked<FAssetRegistryModule>("AssetRegistry");
+
     FARFilter Filter;
     Filter.ClassPaths.Add(UTexture2D::StaticClass()->GetClassPathName());
     Filter.bRecursiveClasses = true;
 
-    TArray<FAssetData> Assets;
-    Registry.GetAssets(Filter, Assets);
+    ARM.Get().GetAssets(Filter, Assets);
 
-    /* 3. Processa cada asset */
-    Results.Reserve(Assets.Num());
-    for (const FAssetData& AD : Assets)
-    {
-        HandleAsset(AD, Results);
-    }
-
-    UE_LOG(LogTemp, Log, TEXT("[STB] ScanProject encontrou %d texturas"), Results.Num());
-    OnScanFinished.Broadcast(Results);
+    bScanning = true;
+    LoadNextBatch();
 }
 
-void UTextureBudgetScanner::HandleAsset(const FAssetData& Asset,
-    TArray<FTextureFootprint>& OutArray) const
+/* ----------------------------------------------------------------- */
+void UTextureBudgetScanner::CancelScan()
 {
-    FTextureFootprint FP;
-    FP.AssetData = Asset;
+    if (!bScanning) return;
 
-    FString W, H;
-    if (Asset.GetTagValue("ImportedSizeX", W) &&
-        Asset.GetTagValue("ImportedSizeY", H))
+    if (CurrentHandle.IsValid())
     {
-        FP.Width = FCString::Atoi(*W);
-        FP.Height = FCString::Atoi(*H);
-        FP.BytesCurrent = FP.Width * FP.Height * 4;   // aproxima��o
+        CurrentHandle->CancelHandle();
+        CurrentHandle.Reset();
+    }
+    Assets.Empty();
+    bScanning = false;
+}
+
+/* ----------------------------------------------------------------- */
+void UTextureBudgetScanner::LoadNextBatch()
+{
+    if (CurrentIndex >= Assets.Num())
+    {
+        /* terminou */
+        bScanning = false;
+        Assets.Empty();
+        CurrentHandle.Reset();
+        OnFinished.Broadcast();
+        return;
     }
 
-    OutArray.Add(FP);
+    /* Paths do próximo lote ------------------------------------- */
+    CurrentPaths.Empty();
+    for (int32 i = 0; i < BatchSize && CurrentIndex < Assets.Num(); ++i, ++CurrentIndex)
+    {
+        CurrentPaths.Add(Assets[CurrentIndex].ToSoftObjectPath());
+    }
+
+    CurrentHandle = Streamable.RequestAsyncLoad(
+        CurrentPaths,
+        FStreamableDelegate::CreateUObject(this, &UTextureBudgetScanner::HandleBatchLoaded),
+        FStreamableManager::AsyncLoadHighPriority);
+}
+
+/* ----------------------------------------------------------------- */
+void UTextureBudgetScanner::HandleBatchLoaded()
+{
+    for (const FSoftObjectPath& Path : CurrentPaths)
+    {
+        UTexture2D* Tex = Cast<UTexture2D>(Path.ResolveObject());
+        if (!Tex) continue;
+
+        Tex->FinishCachePlatformData();   // rápido; compilação vai em thread própria
+
+        FTextureFootprint FP;
+        FP.AssetData = FAssetData(Tex);
+        FP.Width = Tex->GetSizeX();
+        FP.Height = Tex->GetSizeY();
+        FP.ResourceSizeBytes = Tex->GetResourceSizeBytes(
+            EResourceSizeMode::EstimatedTotal);
+
+        OnFootprintReady.Broadcast(FP);
+    }
+
+    /* Próximo lote ------------------------------------------------ */
+    CurrentHandle.Reset();
+    LoadNextBatch();
 }
