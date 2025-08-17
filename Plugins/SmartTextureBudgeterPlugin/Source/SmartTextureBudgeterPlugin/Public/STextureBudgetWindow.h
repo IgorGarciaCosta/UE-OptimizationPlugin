@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #if WITH_EDITOR
 
 #include "Widgets/SCompoundWidget.h"
@@ -19,6 +19,7 @@ private:
     /* UI callbacks */
     FReply OnScanClicked();
     void   HandleScanFinished(const TArray<FTextureFootprint>& Results);
+    void   OpenAsset(const TSharedPtr<FTextureFootprint>& Item);   // ← novo
 
     /* ListView + dados */
     TSharedPtr<SListView<TSharedPtr<FTextureFootprint>>> ListView;

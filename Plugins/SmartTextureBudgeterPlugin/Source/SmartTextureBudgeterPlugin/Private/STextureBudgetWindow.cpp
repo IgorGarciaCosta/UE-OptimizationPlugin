@@ -1,11 +1,14 @@
-#include "STextureBudgetWindow.h"
+﻿#include "STextureBudgetWindow.h"
 #if WITH_EDITOR
 
 #include "TextureBudgetScanner.h"
 #include "AssetThumbnail.h"
+#include "Subsystems/AssetEditorSubsystem.h"
+#include "Editor.h"
+
 #include "Widgets/Text/STextBlock.h"
 #include "Widgets/Input/SButton.h"
-#include "Widgets/SBoxPanel.h" 
+#include "Widgets/SBoxPanel.h"          // SVerticalBox / SHorizontalBox
 #include "Widgets/Views/SListView.h"
 #include "Widgets/Views/STableRow.h"
 
@@ -13,23 +16,22 @@ TSharedPtr<FAssetThumbnailPool> STextureBudgetWindow::ThumbPool;
 
 void STextureBudgetWindow::Construct(const FArguments& InArgs)
 {
-    /* Pool �nico (compartilhado) */
     if (!ThumbPool.IsValid())
     {
         ThumbPool = MakeShareable(new FAssetThumbnailPool(32));
     }
 
-    /* Cria o scanner e liga callback */
+    /* Cria scanner e callback */
     Scanner = NewObject<UTextureBudgetScanner>();
     Scanner->AddToRoot();
     Scanner->OnScanFinished.AddRaw(this, &STextureBudgetWindow::HandleScanFinished);
 
-    /* ---------- UI ---------- */
+    /* ------------------ UI ------------------ */
     ChildSlot
         [
             SNew(SVerticalBox)
 
-                /* Bot�o Scan */
+                /* Botão Scan */
                 + SVerticalBox::Slot().AutoHeight().Padding(4)
                 [
                     SNew(SButton)
@@ -37,20 +39,20 @@ void STextureBudgetWindow::Construct(const FArguments& InArgs)
                         .OnClicked(this, &STextureBudgetWindow::OnScanClicked)
                 ]
 
-                /* ListView */
+                /* ListView com thumbnails */
                 + SVerticalBox::Slot().FillHeight(1.f).Padding(4)
                 [
                     SAssignNew(ListView, SListView<TSharedPtr<FTextureFootprint>>)
                         .ListItemsSource(&RowData)
 
+                        /* gera cada linha */
                         .OnGenerateRow_Lambda([](TSharedPtr<FTextureFootprint> Item,
-                            const TSharedRef<STableViewBase>& OwnerTable)
+                            const TSharedRef<STableViewBase>& Owner)
                             {
-                                /* Thumbnail 64�64 */
                                 TSharedPtr<FAssetThumbnail> Thumb = MakeShareable(
                                     new FAssetThumbnail(Item->AssetData, 64, 64, STextureBudgetWindow::ThumbPool));
 
-                                return SNew(STableRow<TSharedPtr<FTextureFootprint>>, OwnerTable)
+                                return SNew(STableRow<TSharedPtr<FTextureFootprint>>, Owner)
                                     [
                                         SNew(SHorizontalBox)
 
@@ -65,6 +67,12 @@ void STextureBudgetWindow::Construct(const FArguments& InArgs)
                                                     .Text(FText::FromName(Item->AssetData.AssetName))
                                             ]
                                     ];
+                            })
+
+                        /* duplo-clique → abrir no editor */
+                        .OnMouseButtonDoubleClick_Lambda([this](TSharedPtr<FTextureFootprint> Item)
+                            {
+                                OpenAsset(Item);
                             })
                 ]
         ];
@@ -89,6 +97,22 @@ void STextureBudgetWindow::HandleScanFinished(const TArray<FTextureFootprint>& R
         RowData.Add(MakeShared<FTextureFootprint>(FP));
     }
     ListView->RequestListRefresh();
+}
+
+/* ---------------------------------------------------
+   Abre a textura na aba padrão de edição
+   --------------------------------------------------- */
+void STextureBudgetWindow::OpenAsset(const TSharedPtr<FTextureFootprint>& Item)
+{
+    if (!Item.IsValid()) return;
+
+    UObject* Asset = Item->AssetData.GetAsset();
+    if (!Asset) return;
+
+    if (UAssetEditorSubsystem* Sub = GEditor->GetEditorSubsystem<UAssetEditorSubsystem>())
+    {
+        Sub->OpenEditorForAsset(Asset);
+    }
 }
 
 #endif  // WITH_EDITOR
