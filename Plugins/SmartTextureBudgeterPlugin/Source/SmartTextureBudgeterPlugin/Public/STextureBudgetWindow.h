@@ -7,6 +7,14 @@
 
 class UTextureBudgetScanner;
 
+/* modos de ordenação */
+enum class ESortMode : uint8
+{
+    Ascending,
+    Descending,
+    Alphabetical
+};
+
 class STextureBudgetWindow : public SCompoundWidget
 {
 public:
@@ -14,18 +22,25 @@ public:
     SLATE_END_ARGS()
 
     void Construct(const FArguments& InArgs);
-    virtual ~STextureBudgetWindow() override;          // <-- DESTRUTOR
+    virtual ~STextureBudgetWindow() override;
 
 private:
     /* UI callbacks ------------------------------------------------------ */
     FReply OnScanClicked();
     void   HandleFootprintReady(const FTextureFootprint& FP);
     void   HandleScanFinished();
+
+    /* ordenação --------------------------------------------------------- */
+    TSharedRef<SWidget> BuildSortMenu();
+    void   OnSortChosen(ESortMode InMode);
+    void   ApplySort();
+    FText  GetSortLabel() const;                 // texto dinâmico do botão
     void   OpenAsset(const TSharedPtr<FTextureFootprint>& Item);
 
     /* Estado ------------------------------------------------------------ */
-    bool bIsScanning = false;
-    double LastRefresh = 0.0;
+    bool      bIsScanning = false;
+    double    LastRefresh = 0.0;
+    ESortMode CurrentSort = ESortMode::Ascending;
 
     /* Widgets ----------------------------------------------------------- */
     TSharedPtr<SListView<TSharedPtr<FTextureFootprint>>> ListView;
@@ -34,7 +49,7 @@ private:
     /* Dados ------------------------------------------------------------- */
     TArray<TSharedPtr<FTextureFootprint>> RowData;
 
-    /* Scanner UObject --------------------------------------------------- */
+    /* Scanner ----------------------------------------------------------- */
     TObjectPtr<UTextureBudgetScanner> Scanner;
 
     /* Thumbnails -------------------------------------------------------- */
