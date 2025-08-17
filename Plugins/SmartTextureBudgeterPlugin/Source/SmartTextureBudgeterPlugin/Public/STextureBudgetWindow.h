@@ -7,7 +7,7 @@
 
 class UTextureBudgetScanner;
 
-/* modos de ordenação */
+/* modos de ordenação -------------------------------------------------- */
 enum class ESortMode : uint8
 {
     Ascending,
@@ -30,24 +30,31 @@ private:
     void   HandleFootprintReady(const FTextureFootprint& FP);
     void   HandleScanFinished();
 
+    /* busca ------------------------------------------------------------- */
+    void   OnSearchChanged(const FText& NewText);
+    void   RebuildFilteredList();
+
     /* ordenação --------------------------------------------------------- */
     TSharedRef<SWidget> BuildSortMenu();
     void   OnSortChosen(ESortMode InMode);
     void   ApplySort();
-    FText  GetSortLabel() const;                 // texto dinâmico do botão
+    FText  GetSortLabel() const;
     void   OpenAsset(const TSharedPtr<FTextureFootprint>& Item);
 
     /* Estado ------------------------------------------------------------ */
     bool      bIsScanning = false;
     double    LastRefresh = 0.0;
     ESortMode CurrentSort = ESortMode::Ascending;
+    FString   CurrentFilter;           // texto do campo de busca
 
     /* Widgets ----------------------------------------------------------- */
     TSharedPtr<SListView<TSharedPtr<FTextureFootprint>>> ListView;
-    TSharedPtr<class SThrobber> Spinner;
+    TSharedPtr<class SThrobber>      Spinner;
+    TSharedPtr<class SSearchBox>     SearchBox;
 
     /* Dados ------------------------------------------------------------- */
-    TArray<TSharedPtr<FTextureFootprint>> RowData;
+    TArray<TSharedPtr<FTextureFootprint>> AllRows;   // tudo
+    TArray<TSharedPtr<FTextureFootprint>> RowData;   // filtrado + ordenado
 
     /* Scanner ----------------------------------------------------------- */
     TObjectPtr<UTextureBudgetScanner> Scanner;

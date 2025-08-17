@@ -9,6 +9,7 @@
 #include "Widgets/Text/STextBlock.h"
 #include "Widgets/Input/SButton.h"
 #include "Widgets/Input/SComboButton.h"
+#include "Widgets/Input/SSearchBox.h"
 #include "Widgets/SBoxPanel.h"
 #include "Widgets/Images/SThrobber.h"
 #include "Widgets/Views/SListView.h"
@@ -18,19 +19,19 @@
 
 TSharedPtr<FAssetThumbnailPool> STextureBudgetWindow::ThumbPool;
 
-/*--------------------------------------------------------------*/
+/*------------------------------------------------------------------------*/
 void STextureBudgetWindow::Construct(const FArguments& InArgs)
 {
     if (!ThumbPool.IsValid())
         ThumbPool = MakeShareable(new FAssetThumbnailPool(32));
 
-    /* Scanner -------------------------------------------------- */
+    /* Scanner */
     Scanner = NewObject<UTextureBudgetScanner>();
     Scanner->AddToRoot();
     Scanner->OnFootprintReady.AddRaw(this, &STextureBudgetWindow::HandleFootprintReady);
     Scanner->OnFinished.AddRaw(this, &STextureBudgetWindow::HandleScanFinished);
 
-    /* UI ------------------------------------------------------- */
+    /* UI */
     ChildSlot
         [
             SNew(SOverlay)
@@ -39,7 +40,7 @@ void STextureBudgetWindow::Construct(const FArguments& InArgs)
                 [
                     SNew(SVerticalBox)
 
-                        /* --- Barra de botões -------------------------------- */
+                        /* --- Barra de botões ------------------------------------- */
                         + SVerticalBox::Slot().AutoHeight().Padding(4)
                         [
                             SNew(SHorizontalBox)
@@ -54,7 +55,7 @@ void STextureBudgetWindow::Construct(const FArguments& InArgs)
                                 ]
 
                                 /* Sort combo */
-                                + SHorizontalBox::Slot().AutoWidth()
+                                + SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 8, 0)
                                 [
                                     SNew(SComboButton)
                                         .ButtonContent()
@@ -64,9 +65,17 @@ void STextureBudgetWindow::Construct(const FArguments& InArgs)
                                         ]
                                         .OnGetMenuContent(this, &STextureBudgetWindow::BuildSortMenu)
                                 ]
+
+                                /* Search box */
+                                + SHorizontalBox::Slot().FillWidth(1.f)
+                                [
+                                    SAssignNew(SearchBox, SSearchBox)
+                                        .OnTextChanged(this, &STextureBudgetWindow::OnSearchChanged)
+                                        .HintText(FText::FromString(TEXT("Search...")))
+                                ]
                         ]
 
-                        /* --- Lista ------------------------------------------ */
+                        /* --- Lista ------------------------------------------------- */
                         + SVerticalBox::Slot().FillHeight(1.f).Padding(4)
                         [
                             SAssignNew(ListView, SListView<TSharedPtr<FTextureFootprint>>)
@@ -111,7 +120,7 @@ void STextureBudgetWindow::Construct(const FArguments& InArgs)
                         ]
                 ]
 
-                /* --- Spinner ------------------------------------------- */
+                /* --- Spinner --------------------------------------------------- */
                 + SOverlay::Slot().HAlign(HAlign_Center).VAlign(VAlign_Center)
                 [
                     SAssignNew(Spinner, SThrobber)
@@ -123,7 +132,7 @@ void STextureBudgetWindow::Construct(const FArguments& InArgs)
         ];
 }
 
-/*--------------------------------------------------------------*/
+/*------------------------------------------------------------------------*/
 STextureBudgetWindow::~STextureBudgetWindow()
 {
     if (Scanner)
@@ -136,12 +145,13 @@ STextureBudgetWindow::~STextureBudgetWindow()
     }
 }
 
-/*--------------------------------------------------------------*/
+/*-------------------------- Scan ----------------------------------------*/
 FReply STextureBudgetWindow::OnScanClicked()
 {
     if (bIsScanning) return FReply::Handled();
 
     bIsScanning = true;
+    AllRows.Empty();
     RowData.Empty();
     ListView->RequestListRefresh();
     LastRefresh = FPlatformTime::Seconds();
@@ -150,64 +160,79 @@ FReply STextureBudgetWindow::OnScanClicked()
     return FReply::Handled();
 }
 
-/*--------------------------------------------------------------*/
 void STextureBudgetWindow::HandleFootprintReady(const FTextureFootprint& FP)
 {
-    RowData.Add(MakeShared<FTextureFootprint>(FP));
+    AllRows.Add(MakeShared<FTextureFootprint>(FP));
 
     const double Now = FPlatformTime::Seconds();
     if (Now - LastRefresh > 0.25)
     {
-        ApplySort();
+        RebuildFilteredList();
         LastRefresh = Now;
         ListView->RequestListRefresh();
     }
 }
 
-/*--------------------------------------------------------------*/
 void STextureBudgetWindow::HandleScanFinished()
 {
-    ApplySort();
+    RebuildFilteredList();
     ListView->RequestListRefresh();
     bIsScanning = false;
 }
 
-/*---------------------- Ordenação --------------------------------*/
-/*---------------------- Ordenação : menu -------------------------------*/
+/*-------------------------- Busca ---------------------------------------*/
+void STextureBudgetWindow::OnSearchChanged(const FText& NewText)
+{
+    CurrentFilter = NewText.ToString();
+    RebuildFilteredList();
+    ListView->RequestListRefresh();
+}
+
+void STextureBudgetWindow::RebuildFilteredList()
+{
+    /* aplica filtro + ordenação */
+    RowData.Empty();
+
+    const bool bHasFilter = !CurrentFilter.IsEmpty();
+    const FString FilterLower = CurrentFilter.ToLower();
+
+    for (const TSharedPtr<FTextureFootprint>& FP : AllRows)
+    {
+        if (!bHasFilter)
+        {
+            RowData.Add(FP);
+        }
+        else
+        {
+            const FString Name = FP->AssetData.AssetName.ToString().ToLower();
+            if (Name.Contains(FilterLower))
+                RowData.Add(FP);
+        }
+    }
+    ApplySort();
+}
+
+/*-------------------------- Ordenação -----------------------------------*/
 TSharedRef<SWidget> STextureBudgetWindow::BuildSortMenu()
 {
-    FMenuBuilder Menu(/*bInShouldCloseWindowAfterMenuSelection*/ true, nullptr);
+    FMenuBuilder Menu(true, nullptr);
 
-    Menu.BeginSection("SortSection", FText::FromString(TEXT("Sort list")));
-    {
-        Menu.AddMenuEntry(
-            FText::FromString(TEXT("Ascending")),
-            FText::FromString(TEXT("Small → Large (memory)")),
-            FSlateIcon(),
-            FUIAction(FExecuteAction::CreateSP(this, &STextureBudgetWindow::OnSortChosen,
-                ESortMode::Ascending)));
+    auto AddEntry = [&](ESortMode Mode, const FString& Label)
+        {
+            Menu.AddMenuEntry(
+                FText::FromString(Label),
+                FText::GetEmpty(),
+                FSlateIcon(),
+                FUIAction(FExecuteAction::CreateSP(this, &STextureBudgetWindow::OnSortChosen, Mode))
+            );
+        };
 
-        Menu.AddMenuEntry(
-            FText::FromString(TEXT("Descending")),
-            FText::FromString(TEXT("Large → Small (memory)")),
-            FSlateIcon(),
-            FUIAction(FExecuteAction::CreateSP(this, &STextureBudgetWindow::OnSortChosen,
-                ESortMode::Descending)));
-
-        Menu.AddMenuEntry(
-            FText::FromString(TEXT("Alphabetical")),
-            FText::FromString(TEXT("A → Z (asset name)")),
-            FSlateIcon(),
-            FUIAction(FExecuteAction::CreateSP(this, &STextureBudgetWindow::OnSortChosen,
-                ESortMode::Alphabetical)));
-    }
-    Menu.EndSection();
-
+    AddEntry(ESortMode::Ascending, TEXT("Ascending"));
+    AddEntry(ESortMode::Descending, TEXT("Descending"));
+    AddEntry(ESortMode::Alphabetical, TEXT("Alphabetical"));
     return Menu.MakeWidget();
 }
 
-
-/*--------------------------------------------------------------*/
 void STextureBudgetWindow::OnSortChosen(ESortMode InMode)
 {
     if (CurrentSort == InMode) return;
@@ -216,7 +241,6 @@ void STextureBudgetWindow::OnSortChosen(ESortMode InMode)
     ListView->RequestListRefresh();
 }
 
-/*--------------------------------------------------------------*/
 void STextureBudgetWindow::ApplySort()
 {
     switch (CurrentSort)
@@ -224,30 +248,23 @@ void STextureBudgetWindow::ApplySort()
     case ESortMode::Ascending:
         RowData.Sort([](const TSharedPtr<FTextureFootprint>& A,
             const TSharedPtr<FTextureFootprint>& B)
-            {
-                return A->ResourceSizeBytes < B->ResourceSizeBytes;
-            });
+            { return A->ResourceSizeBytes < B->ResourceSizeBytes; });
         break;
 
     case ESortMode::Descending:
         RowData.Sort([](const TSharedPtr<FTextureFootprint>& A,
             const TSharedPtr<FTextureFootprint>& B)
-            {
-                return A->ResourceSizeBytes > B->ResourceSizeBytes;
-            });
+            { return A->ResourceSizeBytes > B->ResourceSizeBytes; });
         break;
 
     case ESortMode::Alphabetical:
         RowData.Sort([](const TSharedPtr<FTextureFootprint>& A,
             const TSharedPtr<FTextureFootprint>& B)
-            {
-                return A->AssetData.AssetName.LexicalLess(B->AssetData.AssetName);
-            });
+            { return A->AssetData.AssetName.LexicalLess(B->AssetData.AssetName); });
         break;
     }
 }
 
-/*--------------------------------------------------------------*/
 FText STextureBudgetWindow::GetSortLabel() const
 {
     switch (CurrentSort)
@@ -259,7 +276,7 @@ FText STextureBudgetWindow::GetSortLabel() const
     }
 }
 
-/*--------------------------------------------------------------*/
+/*-------------------------- Abrir Asset ---------------------------------*/
 void STextureBudgetWindow::OpenAsset(const TSharedPtr<FTextureFootprint>& Item)
 {
     if (!Item.IsValid()) return;
@@ -267,9 +284,7 @@ void STextureBudgetWindow::OpenAsset(const TSharedPtr<FTextureFootprint>& Item)
     if (UAssetEditorSubsystem* Sub = GEditor->GetEditorSubsystem<UAssetEditorSubsystem>())
     {
         if (UObject* Asset = Item->AssetData.GetAsset())
-        {
             Sub->OpenEditorForAsset(Asset);
-        }
     }
 }
 #endif /* WITH_EDITOR */
