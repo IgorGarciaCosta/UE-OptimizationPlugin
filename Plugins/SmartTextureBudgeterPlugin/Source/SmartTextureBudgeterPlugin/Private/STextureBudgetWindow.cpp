@@ -102,6 +102,18 @@ void STextureBudgetWindow::Construct(const FArguments& InArgs)
         ];
 }
 
+STextureBudgetWindow::~STextureBudgetWindow()
+{
+    if (Scanner)
+    {
+        Scanner->OnFootprintReady.RemoveAll(this);
+        Scanner->OnFinished.RemoveAll(this);
+        Scanner->CancelScan();
+        Scanner->RemoveFromRoot();
+        Scanner = nullptr;
+    }
+}
+
 /*------------------------------------------------------------*/
 FReply STextureBudgetWindow::OnScanClicked()
 {

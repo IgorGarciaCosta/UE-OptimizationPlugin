@@ -14,29 +14,30 @@ public:
     SLATE_END_ARGS()
 
     void Construct(const FArguments& InArgs);
+    virtual ~STextureBudgetWindow() override;          // <-- DESTRUTOR
 
 private:
-    /* UI --------------------------------------------------- */
+    /* UI callbacks ------------------------------------------------------ */
     FReply OnScanClicked();
     void   HandleFootprintReady(const FTextureFootprint& FP);
     void   HandleScanFinished();
     void   OpenAsset(const TSharedPtr<FTextureFootprint>& Item);
 
-    /* Estado ----------------------------------------------- */
+    /* Estado ------------------------------------------------------------ */
     bool bIsScanning = false;
     double LastRefresh = 0.0;
 
-    /* Widgets ---------------------------------------------- */
+    /* Widgets ----------------------------------------------------------- */
     TSharedPtr<SListView<TSharedPtr<FTextureFootprint>>> ListView;
     TSharedPtr<class SThrobber> Spinner;
 
-    /* Dados ------------------------------------------------ */
+    /* Dados ------------------------------------------------------------- */
     TArray<TSharedPtr<FTextureFootprint>> RowData;
 
-    /* Scanner UObject -------------------------------------- */
+    /* Scanner UObject --------------------------------------------------- */
     TObjectPtr<UTextureBudgetScanner> Scanner;
 
-    /* Thumbnails ------------------------------------------- */
+    /* Thumbnails -------------------------------------------------------- */
     static TSharedPtr<FAssetThumbnailPool> ThumbPool;
 };
 
