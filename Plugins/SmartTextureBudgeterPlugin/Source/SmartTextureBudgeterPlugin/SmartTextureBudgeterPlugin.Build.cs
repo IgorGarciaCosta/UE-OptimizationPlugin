@@ -7,7 +7,7 @@ public class SmartTextureBudgeterPlugin : ModuleRules
     {
         PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 
-        /* ── módulos necessários em runtime ── */
+        /* ---- módulos necessários em runtime ---- */
         PublicDependencyModuleNames.AddRange(new string[]
         {
             "Core",
@@ -17,7 +17,7 @@ public class SmartTextureBudgeterPlugin : ModuleRules
             "InputCore"
         });
 
-        /* ── módulos extras quando compilar o Editor ── */
+        /* ---- módulos extras para o Editor ---- */
         if (Target.bBuildEditor)
         {
             PrivateDependencyModuleNames.AddRange(new string[]
@@ -27,7 +27,15 @@ public class SmartTextureBudgeterPlugin : ModuleRules
                 "SlateCore",
                 "EditorStyle",
                 "ToolMenus",
-                "ContentBrowser"     // thumbnails
+                "ContentBrowser",
+                "TextureUtilitiesCommon",
+                "TextureEditor"        //  << aqui agora
+            });
+
+            /* expõe headers da pasta Private do módulo ---------------- */
+            PrivateIncludePathModuleNames.AddRange(new string[]
+            {
+                "TextureEditor"        //  << caminho p/ TextureEditorSubsystem.h
             });
         }
     }

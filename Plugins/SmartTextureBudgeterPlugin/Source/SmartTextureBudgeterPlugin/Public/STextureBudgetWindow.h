@@ -39,28 +39,33 @@ private:
     void   OnSortChosen(ESortMode InMode);
     void   ApplySort();
     FText  GetSortLabel() const;
+
+    /* item -------------------------------------------------------------- */
     void   OpenAsset(const TSharedPtr<FTextureFootprint>& Item);
+    void   OpenResizeDialog(const TSharedPtr<FTextureFootprint>& Item);
 
     /* Estado ------------------------------------------------------------ */
     bool      bIsScanning = false;
     double    LastRefresh = 0.0;
     ESortMode CurrentSort = ESortMode::Ascending;
-    FString   CurrentFilter;           // texto do campo de busca
+    FString   CurrentFilter;
 
     /* Widgets ----------------------------------------------------------- */
     TSharedPtr<SListView<TSharedPtr<FTextureFootprint>>> ListView;
-    TSharedPtr<class SThrobber>      Spinner;
-    TSharedPtr<class SSearchBox>     SearchBox;
+    TSharedPtr<class SThrobber>  Spinner;
+    TSharedPtr<class SSearchBox> SearchBox;
 
     /* Dados ------------------------------------------------------------- */
-    TArray<TSharedPtr<FTextureFootprint>> AllRows;   // tudo
-    TArray<TSharedPtr<FTextureFootprint>> RowData;   // filtrado + ordenado
+    TArray<TSharedPtr<FTextureFootprint>> AllRows;
+    TArray<TSharedPtr<FTextureFootprint>> RowData;
 
     /* Scanner ----------------------------------------------------------- */
     TObjectPtr<UTextureBudgetScanner> Scanner;
 
     /* Thumbnails -------------------------------------------------------- */
     static TSharedPtr<FAssetThumbnailPool> ThumbPool;
+
+    TWeakPtr<class SWindow> ActiveResizeWindow;
 };
 
 #endif /* WITH_EDITOR */
